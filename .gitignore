@@ -1,0 +1,40 @@
+# Build intermediates
+build/
+
+# Publishable artifacts
+dist/
+eboot.bin
+pkg.gp4
+*.pkg
+
+# Generated icons (from SVG at build time)
+assets/misc/
+assets/icons/generated/
+
+# Generated DDS (built from packaging/sce_sys/*.png during make pkg)
+packaging/sce_sys/*.dds
+
+# Legacy packaging outputs (pre-restructure layout)
+sce_sys/param.sfo
+sce_sys/icon0.png
+sce_sys/pic0.png
+sce_sys/pic1.png
+
+# Local analysis / dumps
+analysis/
+*.rar
+*.log
+temp.log
+temp2.log
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+.env
+
+# Local design notes (not published)
+docs/
