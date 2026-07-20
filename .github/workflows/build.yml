@@ -47,6 +47,20 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang lld librsvg2-bin imagemagick make
 
+      - name: Install libssl1.1 (required by PkgTool.Core pkg_build)
+        run: |
+          set -euo pipefail
+          # PkgTool.Core dlopen()'s libssl at runtime for pkg_build's signing
+          # step, so it doesn't show up via ldd - only fails at actual pkg
+          # build time with "No usable version of libssl was found".
+          # Ubuntu 24.04 runners ship only libssl3; libssl1.1 must be
+          # installed manually since it's no longer in the default repos.
+          curl -fsSL -o /tmp/libssl1.1.deb \
+            "http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb"
+          sudo dpkg -i /tmp/libssl1.1.deb
+          rm -f /tmp/libssl1.1.deb
+          ldconfig -p | grep -q libssl.so.1.1 || { echo "::error::libssl.so.1.1 still not registered after install"; exit 1; }
+
       - name: Verify toolchain env
         run: |
           set -euo pipefail
