@@ -58,12 +58,12 @@ jobs:
             echo "Found native 'magick' binary."
           elif command -v convert >/dev/null 2>&1; then
             echo "No 'magick' binary (ImageMagick 6 detected) — installing shim wrapping 'convert'."
-            sudo tee /usr/local/bin/magick > /dev/null <<'EOF'
-#!/usr/bin/env bash
-# Shim: ImageMagick 6 has no unified 'magick' command.
-# 'magick <args>' == 'convert <args>' for the subset this build uses.
-exec convert "$@"
-EOF
+            printf '%s\n' \
+              '#!/usr/bin/env bash' \
+              '# Shim: ImageMagick 6 has no unified magick command.' \
+              '# "magick <args>" == "convert <args>" for the subset this build uses.' \
+              'exec convert "$@"' \
+              | sudo tee /usr/local/bin/magick > /dev/null
             sudo chmod +x /usr/local/bin/magick
           else
             echo "::error::Neither 'magick' nor 'convert' found on PATH (ImageMagick not installed correctly)"
