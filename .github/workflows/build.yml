@@ -29,10 +29,10 @@ jobs:
             tar \
             rsync
           
-          # Fix 1: ImageMagick binary alias ('magick' -> 'convert')
+          # Symlink 'magick' -> 'convert' for ImageMagick asset processing
           sudo ln -sf $(which convert) /usr/local/bin/magick
 
-          # Fix 2: Download and install libssl1.1 required by OpenOrbis PkgTool.Core
+          # Install libssl1.1 required by OpenOrbis PkgTool.Core
           wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
 
@@ -51,12 +51,12 @@ jobs:
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
           make
 
-      - name: Upload PKG and ELF Artifacts
+      - name: Upload PKG Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ps5-kylin-explorer-pkg
           path: |
-            dist/*.pkg
-            dist/*.bin
+            **/*.pkg
+            dist/
             build/obj/*.elf
-          if-no-files-found: warn
+          if-no-files-found: error
