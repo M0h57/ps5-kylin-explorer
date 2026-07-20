@@ -29,10 +29,10 @@ jobs:
             tar \
             rsync
 
-          # Fix ImageMagick binary command
+          # ImageMagick command symlink
           sudo ln -sf $(which convert) /usr/local/bin/magick
 
-          # Install libssl1.1 (Required by OpenOrbis PkgTool.Core)
+          # OpenSSL 1.1 required by PkgTool.Core
           wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
 
@@ -53,6 +53,6 @@ jobs:
         with:
           name: ps5-kylin-explorer-pkg
           path: |
-            dist/*.pkg
+            **/*.pkg
             build/obj/*.elf
           if-no-files-found: error
