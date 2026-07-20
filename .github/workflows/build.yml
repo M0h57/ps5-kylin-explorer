@@ -1,58 +1,97 @@
-name: Build PS5 Kylin Explorer PKG
+name: Build PS5 PKG
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+  workflow_dispatch: {}
+
+env:
+  OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis-PS4-Toolchain
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout ps5-kylin-explorer
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies & OpenSSL 1.1
+      - name: Checkout OpenOrbis PS4 Toolchain
+        uses: actions/checkout@v4
+        with:
+          repository: OpenOrbis/OpenOrbis-PS4-Toolchain
+          path: OpenOrbis-PS4-Toolchain
+          submodules: recursive
+
+      - name: Install Clang/LLD + image tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            clang \
-            lld \
-            librsvg2-bin \
-            imagemagick \
-            make \
-            wget \
-            tar \
-            rsync
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            clang lld librsvg2-bin imagemagick make
 
-          # ImageMagick command symlink
-          sudo ln -sf $(which convert) /usr/local/bin/magick
-
-          # OpenSSL 1.1 required by PkgTool.Core
-          wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
-          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
-
-      - name: Setup OpenOrbis Toolchain
+      - name: Verify toolchain env
         run: |
-          mkdir -p /opt/OpenOrbis-PS4-Toolchain
-          wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
-          tar -xzf toolchain-llvm-18.tar.gz -C /opt/OpenOrbis-PS4-Toolchain --strip-components=2
-          echo "OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain" >> $GITHUB_ENV
+          set -euo pipefail
+          echo "OO_PS4_TOOLCHAIN=$OO_PS4_TOOLCHAIN"
+          test -d "$OO_PS4_TOOLCHAIN" || { echo "::error::Toolchain checkout missing at $OO_PS4_TOOLCHAIN"; exit 1; }
+          # OpenOrbis ships a build/link script the Makefile expects to be executable
+          find "$OO_PS4_TOOLCHAIN" -maxdepth 2 -name "*.sh" -exec chmod +x {} \; || true
 
-      - name: Build PKG Package
+      - name: Verify required tools are on PATH
         run: |
-          export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
-          make
+          set -euo pipefail
+          for bin in clang clang++ ld.lld rsvg-convert magick make; do
+            if ! command -v "$bin" >/dev/null 2>&1; then
+              echo "::error::Required tool '$bin' not found on PATH"
+              exit 1
+            fi
+          done
 
-      - name: Upload PKG and ELF Artifacts
+      - name: Run host unit tests
+        run: |
+          set -euo pipefail
+          make test
+
+      - name: Build eboot
+        run: |
+          set -euo pipefail
+          make eboot
+          test -f dist/eboot.bin || { echo "::error::dist/eboot.bin was not produced"; exit 1; }
+
+      - name: Build PKG
+        run: |
+          set -euo pipefail
+          make pkg
+          shopt -s nullglob
+          pkgs=(dist/*.pkg)
+          if [ ${#pkgs[@]} -eq 0 ]; then
+            echo "::error::No .pkg file found in dist/ after 'make pkg'"
+            exit 1
+          fi
+          echo "Built package(s):"
+          ls -lh "${pkgs[@]}"
+
+      - name: Upload PKG artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ps5-kylin-explorer-pkg
+          name: kylin-explorer-pkg
           path: |
-            **/*.pkg
-            build/obj/*.elf
+            dist/*.pkg
+            dist/eboot.bin
+            dist/pkg.gp4
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/
+          if-no-files-found: ignore
+          retention-days: 7
