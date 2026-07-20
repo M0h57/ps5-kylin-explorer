@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Install System Dependencies & OpenSSL 1.1
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -27,47 +27,36 @@ jobs:
             make \
             wget \
             tar \
-            mono-runtime
+            rsync
           
-          # Symlink 'magick' -> 'convert' for ImageMagick asset generation
-          sudo ln -s $(which convert) /usr/local/bin/magick
+          # Fix 1: ImageMagick binary alias ('magick' -> 'convert')
+          sudo ln -sf $(which convert) /usr/local/bin/magick
+
+          # Fix 2: Download and install libssl1.1 required by OpenOrbis PkgTool.Core
+          wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
 
       - name: Setup OpenOrbis Toolchain
         run: |
           mkdir -p /opt/OpenOrbis-PS4-Toolchain
           
-          # Download official prebuilt OpenOrbis toolchain (includes create-eboot & create-pkg)
+          # Download official prebuilt OpenOrbis toolchain release
           wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
           tar -xzf toolchain-llvm-18.tar.gz -C /opt/OpenOrbis-PS4-Toolchain --strip-components=2
           
           echo "OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain" >> $GITHUB_ENV
 
-      - name: Build ELF and Package PKG
+      - name: Build PKG Package
         run: |
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
-          export PATH=$OO_PS4_TOOLCHAIN/bin:$PATH
+          make
 
-          # Try building via 'make pkg' first if supported by the Makefile
-          if grep -q "^pkg:" Makefile; then
-            make pkg
-          else
-            # Manual packaging fallback using OpenOrbis tools
-            make
-            
-            # Convert ELF to eboot.bin
-            create-eboot --in=ps5-kylin-explorer.elf --out=eboot.bin --real
-            
-            # Package into PKG using project's gp4 or param.sfo
-            if [ -f "pkg.gp4" ]; then
-              create-pkg --in=pkg.gp4 --out=.
-            fi
-          fi
-
-      - name: Upload Built PKG Artifact
+      - name: Upload PKG and ELF Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ps5-kylin-explorer-pkg
           path: |
-            *.pkg
-            *.elf
+            dist/*.pkg
+            dist/*.bin
+            build/obj/*.elf
           if-no-files-found: warn
