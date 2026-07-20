@@ -1,4 +1,4 @@
-name: Build PS5 Kylin Explorer
+name: Build PS5 Kylin Explorer PKG
 
 on:
   push:
@@ -26,33 +26,48 @@ jobs:
             imagemagick \
             make \
             wget \
-            tar
+            tar \
+            mono-runtime
           
-          # Create alias link for ImageMagick ('magick' -> 'convert')
+          # Symlink 'magick' -> 'convert' for ImageMagick asset generation
           sudo ln -s $(which convert) /usr/local/bin/magick
 
-      - name: Setup OpenOrbis Toolchain Release
+      - name: Setup OpenOrbis Toolchain
         run: |
           mkdir -p /opt/OpenOrbis-PS4-Toolchain
           
-          # Download and extract official prebuilt OpenOrbis toolchain
+          # Download official prebuilt OpenOrbis toolchain (includes create-eboot & create-pkg)
           wget -q https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
           tar -xzf toolchain-llvm-18.tar.gz -C /opt/OpenOrbis-PS4-Toolchain --strip-components=2
           
           echo "OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain" >> $GITHUB_ENV
 
-      - name: Build Project
+      - name: Build ELF and Package PKG
         run: |
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
-          make
+          export PATH=$OO_PS4_TOOLCHAIN/bin:$PATH
 
-      - name: Upload Built Artifacts
+          # Try building via 'make pkg' first if supported by the Makefile
+          if grep -q "^pkg:" Makefile; then
+            make pkg
+          else
+            # Manual packaging fallback using OpenOrbis tools
+            make
+            
+            # Convert ELF to eboot.bin
+            create-eboot --in=ps5-kylin-explorer.elf --out=eboot.bin --real
+            
+            # Package into PKG using project's gp4 or param.sfo
+            if [ -f "pkg.gp4" ]; then
+              create-pkg --in=pkg.gp4 --out=.
+            fi
+          fi
+
+      - name: Upload Built PKG Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ps5-kylin-explorer-build
+          name: ps5-kylin-explorer-pkg
           path: |
-            *.elf
             *.pkg
-            bin/
-            build/
+            *.elf
           if-no-files-found: warn
