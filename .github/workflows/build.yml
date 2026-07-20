@@ -22,6 +22,9 @@ jobs:
             build-essential \
             clang \
             lld \
+            libc++-dev \
+            libc++abi-dev \
+            libstdc++-dev \
             librsvg2-bin \
             imagemagick \
             make \
@@ -37,11 +40,6 @@ jobs:
       - name: Build Project
         run: |
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
-          
-          # Explicitly expose toolchain C++ headers (<sstream>, <iostream>, etc.) to Clang
-          export CPLUS_INCLUDE_PATH=$OO_PS4_TOOLCHAIN/include/c++/v1:$OO_PS4_TOOLCHAIN/include:$CPLUS_INCLUDE_PATH
-          export C_INCLUDE_PATH=$OO_PS4_TOOLCHAIN/include:$C_INCLUDE_PATH
-          
           make
 
       - name: Upload Built Artifacts
