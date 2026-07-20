@@ -18,12 +18,27 @@ jobs:
       - name: Checkout ps5-kylin-explorer
         uses: actions/checkout@v4
 
-      - name: Checkout OpenOrbis PS4 Toolchain
-        uses: actions/checkout@v4
-        with:
-          repository: OpenOrbis/OpenOrbis-PS4-Toolchain
-          path: OpenOrbis-PS4-Toolchain
-          submodules: recursive
+      - name: Download prebuilt OpenOrbis PS4 Toolchain
+        run: |
+          set -euo pipefail
+          # IMPORTANT: git-cloning the toolchain *source* repo only gives you
+          # build scripts, not a compiled sysroot — that produces
+          # "fatal error: 'sstream' file not found" because the libc++
+          # headers/libs are never generated. We must use the prebuilt
+          # release tarball instead, which ships include/, lib/, and bin/
+          # already built. Asset name/version verified against the actual
+          # v0.5.4 release assets (not guessed) — check for a newer release
+          # at https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases
+          # if this ever starts 404ing.
+          TOOLCHAIN_URL="https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz"
+          mkdir -p "$OO_PS4_TOOLCHAIN"
+          curl -fL "$TOOLCHAIN_URL" -o toolchain.tar.gz
+          # Archive layout is OpenOrbis/PS4Toolchain/<contents> - strip both
+          # leading path components so $OO_PS4_TOOLCHAIN/include etc. exist.
+          tar -xzf toolchain.tar.gz -C "$OO_PS4_TOOLCHAIN" --strip-components=2
+          rm -f toolchain.tar.gz
+          chmod +x "$OO_PS4_TOOLCHAIN"/bin/linux/* || true
+          find "$OO_PS4_TOOLCHAIN/scripts" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
       - name: Install Clang/LLD + image tools
         run: |
@@ -36,9 +51,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "OO_PS4_TOOLCHAIN=$OO_PS4_TOOLCHAIN"
-          test -d "$OO_PS4_TOOLCHAIN" || { echo "::error::Toolchain checkout missing at $OO_PS4_TOOLCHAIN"; exit 1; }
-          # OpenOrbis ships a build/link script the Makefile expects to be executable
-          find "$OO_PS4_TOOLCHAIN" -maxdepth 2 -name "*.sh" -exec chmod +x {} \; || true
+          test -d "$OO_PS4_TOOLCHAIN" || { echo "::error::Toolchain dir missing at $OO_PS4_TOOLCHAIN"; exit 1; }
+          for d in include lib bin; do
+            test -d "$OO_PS4_TOOLCHAIN/$d" || { echo "::error::Expected $OO_PS4_TOOLCHAIN/$d not found — tarball layout may have changed"; exit 1; }
+          done
+          test -f "$OO_PS4_TOOLCHAIN/include/c++/v1/sstream" || { echo "::error::libc++ headers missing (sstream) — sysroot is incomplete"; exit 1; }
+          echo "Toolchain sysroot looks complete."
 
       - name: Verify required tools are on PATH
         run: |
