@@ -24,22 +24,33 @@ jobs:
             lld \
             libc++-dev \
             libc++abi-dev \
-            libstdc++-dev \
+            libstdc++-14-dev \
             librsvg2-bin \
             imagemagick \
             make \
             git \
-            wget
+            wget \
+            python3
 
       - name: Setup OpenOrbis Toolchain
         run: |
           echo "Cloning OpenOrbis Toolchain..."
-          git clone https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git /opt/OpenOrbis-PS4-Toolchain
+          git clone --recursive https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git /opt/OpenOrbis-PS4-Toolchain
+          
+          # Run the OpenOrbis toolchain initialization script if present
+          if [ -f /opt/OpenOrbis-PS4-Toolchain/update.sh ]; then
+            cd /opt/OpenOrbis-PS4-Toolchain && bash update.sh
+          fi
+
           echo "OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain" >> $GITHUB_ENV
 
       - name: Build Project
         run: |
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
+          
+          # Map standard C++ headers into the include path for Clang
+          export CPLUS_INCLUDE_PATH=/usr/include/c++/14:/usr/include/x86_64-linux-gnu/c++/14:$OO_PS4_TOOLCHAIN/include/c++/v1:$OO_PS4_TOOLCHAIN/include:$CPLUS_INCLUDE_PATH
+          
           make
 
       - name: Upload Built Artifacts
