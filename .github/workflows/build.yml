@@ -43,12 +43,38 @@ jobs:
       - name: Verify required tools are on PATH
         run: |
           set -euo pipefail
-          for bin in clang clang++ ld.lld rsvg-convert magick make; do
+          for bin in clang clang++ ld.lld rsvg-convert make; do
             if ! command -v "$bin" >/dev/null 2>&1; then
               echo "::error::Required tool '$bin' not found on PATH"
               exit 1
             fi
           done
+
+          # Ubuntu's 'imagemagick' apt package is ImageMagick 6, which only
+          # provides 'convert'/'identify' (no unified 'magick' binary).
+          # ImageMagick 7's 'magick' command is what the build expects, so
+          # shim it if it's missing but 'convert' is present.
+          if command -v magick >/dev/null 2>&1; then
+            echo "Found native 'magick' binary."
+          elif command -v convert >/dev/null 2>&1; then
+            echo "No 'magick' binary (ImageMagick 6 detected) — installing shim wrapping 'convert'."
+            sudo tee /usr/local/bin/magick > /dev/null <<'EOF'
+#!/usr/bin/env bash
+# Shim: ImageMagick 6 has no unified 'magick' command.
+# 'magick <args>' == 'convert <args>' for the subset this build uses.
+exec convert "$@"
+EOF
+            sudo chmod +x /usr/local/bin/magick
+          else
+            echo "::error::Neither 'magick' nor 'convert' found on PATH (ImageMagick not installed correctly)"
+            exit 1
+          fi
+
+          if ! command -v magick >/dev/null 2>&1; then
+            echo "::error::'magick' still not available after shim install"
+            exit 1
+          fi
+          magick -version || { echo "::error::'magick' shim failed to run"; exit 1; }
 
       - name: Run host unit tests
         run: |
