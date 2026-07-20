@@ -27,6 +27,9 @@ jobs:
             make \
             wget \
             tar
+          
+          # Create alias link for ImageMagick ('magick' -> 'convert')
+          sudo ln -s $(which convert) /usr/local/bin/magick
 
       - name: Setup OpenOrbis Toolchain Release
         run: |
@@ -41,8 +44,6 @@ jobs:
       - name: Build Project
         run: |
           export OO_PS4_TOOLCHAIN=/opt/OpenOrbis-PS4-Toolchain
-          
-          # Run make using the prebuilt toolchain headers
           make
 
       - name: Upload Built Artifacts
